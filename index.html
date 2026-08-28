@@ -184,7 +184,7 @@
                     </button>
                 </form>
 
-                <!-- NOVO: Divisor e Botão de Login com Google -->
+                <!-- Divisor e Botão de Login com Google -->
                 <div class="relative my-6">
                     <div class="absolute inset-0 flex items-center">
                         <div class="w-full border-t border-gray-700"></div>
@@ -685,6 +685,30 @@
         ];
 
         // ==========================================
+        // 🔄 OBSERVADOR DE ESTADO (Executado imediatamente)
+        // ==========================================
+        auth.onAuthStateChanged(async (user) => {
+            try {
+                if (user) {
+                    currentUser = user;
+                    await loadUserData();
+                    showApp(); // Oculta login, exibe app
+                } else {
+                    currentUser = null;
+                    userData = null;
+                    showAuth(); // Oculta app, exibe login
+                }
+            } catch (error) {
+                console.error("Erro crítico no estado de autenticação:", error);
+                showToast("Erro ao carregar dados. Verifique sua conexão.", "error");
+                showAuth(); // Fallback seguro
+            } finally {
+                // GARANTIA: O loading será removido em qualquer cenário
+                hideLoading();
+            }
+        });
+
+        // ==========================================
         // 🔐 AUTENTICAÇÃO
         // ==========================================
         function switchAuthTab(tab) {
@@ -710,6 +734,7 @@
                 showToast('Login realizado com sucesso!', 'success');
             } catch (error) {
                 showAuthError(error.message);
+            } finally {
                 hideLoading();
             }
         }
@@ -724,9 +749,13 @@
             showLoading('Criando sua conta...');
             
             try {
+                // 1. Cria usuário no Auth
                 const cred = await auth.createUserWithEmailAndPassword(email, password);
                 
-                // Cria documento do usuário no Firestore
+                // 2. CORREÇÃO SOLICITADA: Atualiza o perfil com o nome no Firebase Auth
+                await cred.user.updateProfile({ displayName: name });
+
+                // 3. Cria documento no Firestore
                 await db.collection('users').doc(cred.user.uid).set({
                     name: name,
                     email: email,
@@ -742,14 +771,14 @@
                 
                 showToast('Conta criada com sucesso!', 'success');
             } catch (error) {
+                console.error("Erro no registro:", error);
                 showAuthError(error.message);
+            } finally {
+                // GARANTIA: O loading será removido mesmo se o Firestore falhar
                 hideLoading();
             }
         }
 
-        // ==========================================================
-        // 🆕 NOVA FUNÇÃO: LOGIN COM GOOGLE
-        // ==========================================================
         async function handleGoogleLogin() {
             showLoading('Conectando com Google...');
             try {
@@ -757,15 +786,13 @@
                 const result = await auth.signInWithPopup(provider);
                 const user = result.user;
 
-                // Verifica se o usuário já existe no Firestore (coleção 'users')
                 const userDoc = await db.collection('users').doc(user.uid).get();
 
                 if (!userDoc.exists) {
-                    // Primeiro acesso: cria o documento padrão com dados do Google
                     await db.collection('users').doc(user.uid).set({
                         name: user.displayName || 'Usuário Google',
                         email: user.email,
-                        bankroll: 1000, // Banca inicial padrão
+                        bankroll: 1000,
                         initialBankroll: 1000,
                         plan: 'free',
                         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -778,17 +805,19 @@
                 } else {
                     showToast('Login realizado com sucesso!', 'success');
                 }
-                
-                // O listener onAuthStateChanged cuidará automaticamente de mostrar a tela do app
             } catch (error) {
                 console.error("Erro no login com Google:", error);
-                // Trata especificamente o erro de provedor não habilitado no console
-                if (error.code === 'auth/operation-not-allowed') {
+                if (error.code === 'auth/popup-closed-by-user') {
+                    // Silencioso: usuário fechou o popup intencionalmente
+                } else if (error.code === 'auth/operation-not-allowed') {
                     showAuthError('O login com Google não está habilitado no Console do Firebase.');
+                } else if (error.code === 'auth/popup-blocked') {
+                    showAuthError('O pop-up foi bloqueado pelo navegador. Permita pop-ups para este site.');
                 } else {
                     showAuthError(error.message);
                 }
             } finally {
+                // GARANTIA: O loading sempre será removido
                 hideLoading();
             }
         }
@@ -800,43 +829,52 @@
         }
 
         async function handleLogout() {
-            await auth.signOut();
-            showToast('Você saiu da conta', 'info');
+            showLoading('Saindo...');
+            try {
+                await auth.signOut();
+                showToast('Você saiu da conta', 'info');
+            } catch (error) {
+                console.error("Erro ao sair:", error);
+            } finally {
+                hideLoading();
+            }
         }
 
-        // Listener de estado de autenticação
-        auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                currentUser = user;
-                await loadUserData();
-                showApp();
-            } else {
-                currentUser = null;
-                userData = null;
-                showAuth();
-            }
-            hideLoading();
-        });
-
         async function loadUserData() {
-            const doc = await db.collection('users').doc(currentUser.uid).get();
-            if (doc.exists) {
-                userData = doc.data();
-                updateUIWithUserData();
+            try {
+                const doc = await db.collection('users').doc(currentUser.uid).get();
+                if (doc.exists) {
+                    userData = doc.data();
+                    updateUIWithUserData();
+                } else {
+                    // Fallback caso o auth exista mas o documento do Firestore ainda não tenha sido criado
+                    userData = {
+                        name: currentUser.displayName || 'Usuário',
+                        email: currentUser.email,
+                        bankroll: 1000,
+                        initialBankroll: 1000,
+                        plan: 'free',
+                        ticketsCount: 0,
+                        winsCount: 0,
+                        totalProfit: 0
+                    };
+                    updateUIWithUserData();
+                }
+            } catch (error) {
+                console.error("Erro ao carregar dados do Firestore:", error);
+                throw error; // Propaga para o catch do onAuthStateChanged
             }
         }
 
         function updateUIWithUserData() {
             if (!userData) return;
             
-            // Navbar
             document.getElementById('navBankroll').textContent = formatCurrency(userData.bankroll);
             document.getElementById('userInitial').textContent = userData.name.charAt(0).toUpperCase();
             document.getElementById('menuUserName').textContent = userData.name;
             document.getElementById('menuUserEmail').textContent = userData.email;
             document.getElementById('menuUserPlan').textContent = `PLANO ${userData.plan.toUpperCase()}`;
             
-            // Dashboard
             document.getElementById('dashboardUserName').textContent = userData.name.split(' ')[0];
             document.getElementById('statBankroll').textContent = formatCurrency(userData.bankroll);
             const roi = ((userData.bankroll - userData.initialBankroll) / userData.initialBankroll * 100).toFixed(1);
@@ -847,7 +885,6 @@
             document.getElementById('statWinRate').textContent = `${winRate}% de acerto`;
             document.getElementById('statPlan').textContent = userData.plan.toUpperCase();
             
-            // Profile
             document.getElementById('profileName').value = userData.name;
             document.getElementById('profileEmail').value = userData.email;
             document.getElementById('profileBankroll').value = userData.bankroll;
@@ -855,7 +892,7 @@
             document.getElementById('profileWinRate').textContent = `${winRate}%`;
             document.getElementById('profileProfit').textContent = formatCurrency(userData.totalProfit || 0);
             if (userData.createdAt) {
-                const date = userData.createdAt.toDate();
+                const date = userData.createdAt.toDate ? userData.createdAt.toDate() : new Date(userData.createdAt);
                 document.getElementById('profileSince').textContent = date.toLocaleDateString('pt-BR');
             }
             
@@ -915,7 +952,6 @@
         }
 
         function generateLuckyTicket() {
-            // Verifica limite do plano free
             if (userData && userData.plan === 'free') {
                 const today = new Date().toDateString();
                 const todayTickets = userData.dailyTickets && userData.dailyTickets[today] ? userData.dailyTickets[today] : 0;
@@ -992,6 +1028,7 @@
             if (!currentTicket) return;
             
             const stake = parseFloat(document.getElementById('stakeInput').value) || 0;
+            showLoading('Salvando bilhete...');
             
             try {
                 await db.collection('users').doc(currentUser.uid).collection('tickets').add({
@@ -1006,7 +1043,6 @@
                     createdAt: firebase.firestore.FieldValue.serverTimestamp()
                 });
                 
-                // Atualiza contador do usuário
                 const today = new Date().toDateString();
                 const dailyTickets = userData.dailyTickets || {};
                 dailyTickets[today] = (dailyTickets[today] || 0) + 1;
@@ -1023,6 +1059,8 @@
                 showToast('Bilhete salvo com sucesso!', 'success');
             } catch (error) {
                 showToast('Erro ao salvar: ' + error.message, 'error');
+            } finally {
+                hideLoading();
             }
         }
 
@@ -1043,7 +1081,6 @@
         function renderMatches() {
             const grid = document.getElementById('matchesGrid');
             
-            // Escuta mudanças em tempo real no Firebase Realtime DB
             rtdb.ref('liveMatches').on('value', (snapshot) => {
                 const liveData = snapshot.val();
                 const matches = liveData || matchesData;
@@ -1111,7 +1148,7 @@
                 
                 container.innerHTML = snapshot.docs.map(doc => {
                     const t = doc.data();
-                    const date = t.createdAt ? t.createdAt.toDate().toLocaleDateString('pt-BR') : '-';
+                    const date = t.createdAt ? (t.createdAt.toDate ? t.createdAt.toDate() : new Date(t.createdAt)).toLocaleDateString('pt-BR') : '-';
                     const statusColors = {
                         pending: 'bg-warning/20 text-warning',
                         won: 'bg-success/20 text-success',
@@ -1167,7 +1204,6 @@
             
             if (bankrollChart) bankrollChart.destroy();
             
-            // Dados simulados (em produção, viriam do Firestore)
             const labels = Array.from({length: 30}, (_, i) => `${30-i}d`);
             const data = [];
             let value = userData.initialBankroll;
@@ -1225,6 +1261,7 @@
         async function updateProfile() {
             const name = document.getElementById('profileName').value;
             const bankroll = parseFloat(document.getElementById('profileBankroll').value);
+            showLoading('Salvando perfil...');
             
             try {
                 await db.collection('users').doc(currentUser.uid).update({
@@ -1237,17 +1274,19 @@
                 showToast('Perfil atualizado!', 'success');
             } catch (error) {
                 showToast('Erro: ' + error.message, 'error');
+            } finally {
+                hideLoading();
             }
         }
 
         // ==========================================
-        // 💳 PLANOS (Integração Stripe/MercadoPago)
+        // 💳 PLANOS
         // ==========================================
         async function subscribePlan(plan) {
             showToast(`Redirecionando para pagamento do plano ${plan.toUpperCase()}...`, 'info');
             
-            // Simulação: após "pagamento", atualiza o plano
             setTimeout(async () => {
+                showLoading('Ativando plano...');
                 try {
                     await db.collection('users').doc(currentUser.uid).update({
                         plan: plan,
@@ -1259,8 +1298,10 @@
                     navigateTo('dashboard');
                 } catch (error) {
                     showToast('Erro ao ativar plano: ' + error.message, 'error');
+                } finally {
+                    hideLoading();
                 }
-            }, 2000);
+            }, 1500);
         }
 
         // ==========================================
@@ -1389,11 +1430,11 @@
             document.getElementById('loadingText').textContent = text;
             document.getElementById('loadingOverlay').classList.remove('hidden');
         }
+        
         function hideLoading() {
             document.getElementById('loadingOverlay').classList.add('hidden');
         }
 
-        // Fecha menu ao clicar fora
         document.addEventListener('click', (e) => {
             const menu = document.getElementById('userMenu');
             if (!e.target.closest('#userMenu') && !e.target.closest('[onclick*="toggleUserMenu"]')) {
@@ -1401,9 +1442,6 @@
             }
         });
 
-        // ==========================================
-        // 🚀 INICIALIZAÇÃO
-        // ==========================================
         console.log('🚀 NEXUS BET AI PRO inicializado com sucesso no projeto: nexus-bet-ia');
     </script>
 </body>
