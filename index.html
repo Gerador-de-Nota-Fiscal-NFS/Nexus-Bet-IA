@@ -66,8 +66,8 @@
         .custom-scrollbar::-webkit-scrollbar-track { background: #111827; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
         
-        .screen { display: none; }
-        .screen.active { display: block; animation: fadeIn 0.4s ease-out; }
+        .screen { display: none !important; }
+        .screen.active { display: block !important; animation: fadeIn 0.4s ease-out; }
         
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
@@ -258,7 +258,7 @@
                         <button onclick="toggleUserMenu()" class="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold">
                             <span id="userInitial">U</span>
                         </button>
-                        <div id="userMenu" class="hidden absolute right-0 top-12 w-56 glass rounded-xl p-2 shadow-2xl border border-gray-700">
+                        <div id="userMenu" class="hidden absolute right-0 top-12 w-56 glass rounded-xl p-2 shadow-2xl border border-gray-700 z-50">
                             <div class="px-3 py-2 border-b border-gray-700 mb-2">
                                 <p class="text-sm font-bold text-white" id="menuUserName">Usuário</p>
                                 <p class="text-xs text-gray-400" id="menuUserEmail">email@ex.com</p>
@@ -665,6 +665,10 @@
         const db = firebase.firestore();
         const rtdb = firebase.database();
 
+        // 🔒 CORREÇÃO CRÍTICA: Forçar persistência LOCAL da sessão
+        // Isso impede que o navegador deslogue o usuário em recarregamentos ou cliques acidentais
+        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
+
         // ==========================================
         // STATE GLOBAL
         // ==========================================
@@ -673,6 +677,7 @@
         let currentRisk = 'conservative';
         let currentTicket = null;
         let bankrollChart = null;
+        let isAppShown = false; // Guarda de estado para evitar flickering ou chamadas redundantes
 
         // Dados de jogos (simulando API-Football)
         const matchesData = [
@@ -685,25 +690,33 @@
         ];
 
         // ==========================================
-        // 🔄 OBSERVADOR DE ESTADO (Executado imediatamente)
+        // 🔄 OBSERVADOR DE ESTADO (Blindado)
         // ==========================================
         auth.onAuthStateChanged(async (user) => {
+            console.log("🔍 Auth State Changed:", user ? `Logado como ${user.email}` : "Deslogado");
             try {
                 if (user) {
                     currentUser = user;
                     await loadUserData();
-                    showApp(); // Oculta login, exibe app
+                    if (!isAppShown) {
+                        showApp();
+                        isAppShown = true;
+                    }
                 } else {
-                    currentUser = null;
-                    userData = null;
-                    showAuth(); // Oculta app, exibe login
+                    if (isAppShown) {
+                        console.warn("⚠️ Sessão perdida ou encerrada pelo servidor.");
+                        currentUser = null;
+                        userData = null;
+                        showAuth();
+                        isAppShown = false;
+                    }
                 }
             } catch (error) {
-                console.error("Erro crítico no estado de autenticação:", error);
+                console.error("❌ Erro crítico no estado de autenticação:", error);
                 showToast("Erro ao carregar dados. Verifique sua conexão.", "error");
-                showAuth(); // Fallback seguro
+                showAuth();
+                isAppShown = false;
             } finally {
-                // GARANTIA: O loading será removido em qualquer cenário
                 hideLoading();
             }
         });
@@ -749,13 +762,9 @@
             showLoading('Criando sua conta...');
             
             try {
-                // 1. Cria usuário no Auth
                 const cred = await auth.createUserWithEmailAndPassword(email, password);
-                
-                // 2. CORREÇÃO SOLICITADA: Atualiza o perfil com o nome no Firebase Auth
                 await cred.user.updateProfile({ displayName: name });
 
-                // 3. Cria documento no Firestore
                 await db.collection('users').doc(cred.user.uid).set({
                     name: name,
                     email: email,
@@ -774,7 +783,6 @@
                 console.error("Erro no registro:", error);
                 showAuthError(error.message);
             } finally {
-                // GARANTIA: O loading será removido mesmo se o Firestore falhar
                 hideLoading();
             }
         }
@@ -808,7 +816,7 @@
             } catch (error) {
                 console.error("Erro no login com Google:", error);
                 if (error.code === 'auth/popup-closed-by-user') {
-                    // Silencioso: usuário fechou o popup intencionalmente
+                    // Silencioso
                 } else if (error.code === 'auth/operation-not-allowed') {
                     showAuthError('O login com Google não está habilitado no Console do Firebase.');
                 } else if (error.code === 'auth/popup-blocked') {
@@ -817,7 +825,6 @@
                     showAuthError(error.message);
                 }
             } finally {
-                // GARANTIA: O loading sempre será removido
                 hideLoading();
             }
         }
@@ -847,7 +854,6 @@
                     userData = doc.data();
                     updateUIWithUserData();
                 } else {
-                    // Fallback caso o auth exista mas o documento do Firestore ainda não tenha sido criado
                     userData = {
                         name: currentUser.displayName || 'Usuário',
                         email: currentUser.email,
@@ -862,7 +868,7 @@
                 }
             } catch (error) {
                 console.error("Erro ao carregar dados do Firestore:", error);
-                throw error; // Propaga para o catch do onAuthStateChanged
+                throw error;
             }
         }
 
@@ -904,7 +910,8 @@
         // ==========================================
         function navigateTo(view) {
             document.querySelectorAll('#appScreen main section').forEach(s => s.classList.remove('active'));
-            document.getElementById(`${view}View`).classList.add('active');
+            const target = document.getElementById(`${view}View`);
+            if (target) target.classList.add('active');
             
             document.querySelectorAll('.nav-btn').forEach(btn => {
                 btn.classList.remove('bg-primary', 'text-white');
@@ -915,7 +922,9 @@
                 btn.classList.remove('text-gray-400');
             });
             
-            document.getElementById('userMenu').classList.add('hidden');
+            const userMenu = document.getElementById('userMenu');
+            if (userMenu) userMenu.classList.add('hidden');
+            
             window.scrollTo({ top: 0, behavior: 'smooth' });
             
             if (view === 'history') loadHistory();
@@ -923,18 +932,25 @@
         }
 
         function showApp() {
-            document.getElementById('authScreen').classList.remove('active');
-            document.getElementById('appScreen').classList.add('active');
-            navigateTo('dashboard');
+            const authScreen = document.getElementById('authScreen');
+            const appScreen = document.getElementById('appScreen');
+            if (authScreen) authScreen.classList.remove('active');
+            if (appScreen) {
+                appScreen.classList.add('active');
+                navigateTo('dashboard');
+            }
         }
 
         function showAuth() {
-            document.getElementById('appScreen').classList.remove('active');
-            document.getElementById('authScreen').classList.add('active');
+            const authScreen = document.getElementById('authScreen');
+            const appScreen = document.getElementById('appScreen');
+            if (appScreen) appScreen.classList.remove('active');
+            if (authScreen) authScreen.classList.add('active');
         }
 
         function toggleUserMenu() {
-            document.getElementById('userMenu').classList.toggle('hidden');
+            const menu = document.getElementById('userMenu');
+            if (menu) menu.classList.toggle('hidden');
         }
 
         // ==========================================
@@ -1435,9 +1451,13 @@
             document.getElementById('loadingOverlay').classList.add('hidden');
         }
 
+        // 🔒 CORREÇÃO CRÍTICA: Listener de clique blindado para evitar disparos acidentais
         document.addEventListener('click', (e) => {
             const menu = document.getElementById('userMenu');
-            if (!e.target.closest('#userMenu') && !e.target.closest('[onclick*="toggleUserMenu"]')) {
+            const toggleBtn = document.querySelector('[onclick*="toggleUserMenu"]');
+            
+            // Só fecha o menu se o clique foi FORA do menu E FORA do botão que o abre
+            if (menu && !menu.contains(e.target) && toggleBtn && !toggleBtn.contains(e.target)) {
                 menu.classList.add('hidden');
             }
         });
