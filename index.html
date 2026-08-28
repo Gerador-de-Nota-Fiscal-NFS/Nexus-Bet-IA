@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS BET AI PRO | SaaS de Análise Preditiva</title>
+    <meta name="description" content="Plataforma SaaS de IA para análise esportiva com Firebase, bilhetes inteligentes e gestão de banca.">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        dark: '#030712',
+                        panel: '#111827',
+                        primary: '#8b5cf6',
+                        secondary: '#06b6d4',
+                        success: '#10b981',
+                        danger: '#ef4444',
+                        warning: '#f59e0b'
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace']
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Firebase SDKs (Compat - mais estável para single-file) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    
+    <!-- Chart.js para gráficos -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    
+    <!-- Fonts & Icons -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body { background-color: #030712; color: #f3f4f6; font-family: 'Inter', sans-serif; }
+        
+        .glass {
+            background: rgba(17, 24, 39, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(139, 92, 246, 0.15);
+        }
+        .glass-hover:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            box-shadow: 0 0 30px rgba(139, 92, 246, 0.15);
+        }
+        .gradient-text {
+            background: linear-gradient(to right, #8b5cf6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .neon-glow { box-shadow: 0 0 20px rgba(139, 92, 246, 0.4); }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #111827; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #4b5563; border-radius: 3px; }
+        
+        .screen { display: none; }
+        .screen.active { display: block; animation: fadeIn 0.4s ease-out; }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            100% { transform: scale(2); opacity: 0; }
+        }
+        .live-dot::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse-ring 1.5s ease-out infinite;
+        }
+        
+        .loading-spinner {
+            border: 3px solid rgba(139, 92, 246, 0.2);
+            border-top: 3px solid #8b5cf6;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        
+        .toast {
+            animation: slideInRight 0.3s ease-out;
+        }
+        @keyframes slideInRight {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #8b5cf6, #06b6d4);
+            transition: all 0.3s;
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.4);
+        }
+        
+        .plan-card {
+            transition: all 0.3s;
+        }
+        .plan-card:hover {
+            transform: translateY(-8px);
+        }
+        .plan-card.featured {
+            border: 2px solid #8b5cf6;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.1), rgba(6, 182, 212, 0.05));
+        }
+    </style>
+</head>
+<body class="antialiased min-h-screen flex flex-col">
+
+    <!-- ========================================== -->
+    <!-- TELA DE LOGIN / CADASTRO                   -->
+    <!-- ========================================== -->
+    <div id="authScreen" class="screen active min-h-screen flex items-center justify-center p-4">
+        <div class="w-full max-w-md">
+            <div class="text-center mb-8">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-secondary mb-4 shadow-lg shadow-primary/30">
+                    <i class="fas fa-brain text-white text-3xl"></i>
+                </div>
+                <h1 class="text-3xl font-bold text-white">NEXUS <span class="gradient-text">BET AI PRO</span></h1>
+                <p class="text-gray-400 text-sm mt-2">SaaS de Análise Preditiva com Firebase</p>
+            </div>
+
+            <div class="glass rounded-2xl p-8">
+                <div class="flex mb-6 bg-gray-800 p-1 rounded-lg">
+                    <button onclick="switchAuthTab('login')" id="tab-login" class="flex-1 py-2 text-sm font-medium rounded-md bg-primary text-white transition">Entrar</button>
+                    <button onclick="switchAuthTab('register')" id="tab-register" class="flex-1 py-2 text-sm font-medium rounded-md text-gray-400 transition">Criar Conta</button>
+                </div>
+
+                <!-- Login Form -->
+                <form id="loginForm" class="space-y-4" onsubmit="handleLogin(event)">
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Email</label>
+                        <input type="email" id="loginEmail" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition" placeholder="seu@email.com">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Senha</label>
+                        <input type="password" id="loginPassword" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition" placeholder="••••••••">
+                    </div>
+                    <button type="submit" id="loginBtn" class="w-full btn-primary text-white font-bold py-3 rounded-lg">
+                        <i class="fas fa-sign-in-alt mr-2"></i> Entrar na Plataforma
+                    </button>
+                </form>
+
+                <!-- Register Form -->
+                <form id="registerForm" class="space-y-4 hidden" onsubmit="handleRegister(event)">
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Nome Completo</label>
+                        <input type="text" id="regName" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition" placeholder="João Silva">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Email</label>
+                        <input type="email" id="regEmail" required class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition" placeholder="seu@email.com">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Senha (mínimo 6 caracteres)</label>
+                        <input type="password" id="regPassword" required minlength="6" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition" placeholder="••••••••">
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-400 block mb-1">Banca Inicial (R$)</label>
+                        <input type="number" id="regBankroll" required min="100" value="1000" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:border-primary transition">
+                    </div>
+                    <button type="submit" id="registerBtn" class="w-full btn-primary text-white font-bold py-3 rounded-lg">
+                        <i class="fas fa-user-plus mr-2"></i> Criar Conta Grátis
+                    </button>
+                </form>
+
+                <!-- NOVO: Divisor e Botão de Login com Google -->
+                <div class="relative my-6">
+                    <div class="absolute inset-0 flex items-center">
+                        <div class="w-full border-t border-gray-700"></div>
+                    </div>
+                    <div class="relative flex justify-center text-xs uppercase">
+                        <span class="bg-[#111827] px-3 text-gray-500">Ou continue com</span>
+                    </div>
+                </div>
+
+                <button id="google-login-btn" onclick="handleGoogleLogin()" class="w-full bg-gray-800 hover:bg-gray-700 text-white font-bold py-3 rounded-lg border border-gray-700 transition flex items-center justify-center gap-3 group">
+                    <svg class="w-5 h-5 transition-transform group-hover:scale-110" viewBox="0 0 24 24">
+                        <path fill="#EA4335" d="M12 5.04c1.48 0 2.8.53 3.84 1.48l2.88-2.88C16.95 1.97 14.65 1 12 1 7.39 1 3.39 3.68 1.48 7.56l3.38 2.63C5.84 7.08 8.66 5.04 12 5.04z"/>
+                        <path fill="#FBBC05" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58l3.88 3.01c2.27-2.09 3.54-5.17 3.54-8.83z"/>
+                        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.88-3.01c-.98.66-2.23 1.06-3.4 1.06-2.86 0-5.29-1.93-6.16-4.53l-3.38 2.63C3.39 20.32 7.39 23 12 23z"/>
+                        <path fill="#4285F4" d="M5.84 13.86c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09L2.46 7.05C1.56 8.88 1 10.87 1 13s.56 4.12 1.46 5.95l3.38-2.63z"/>
+                    </svg>
+                    Entrar com Google
+                </button>
+
+                <div id="authError" class="hidden mt-4 p-3 bg-danger/20 border border-danger/30 rounded-lg text-danger text-sm"></div>
+            </div>
+
+            <p class="text-center text-xs text-gray-500 mt-6">
+                🔒 Powered by Firebase • Seus dados são criptografados
+            </p>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- APP PRINCIPAL (após login)                 -->
+    <!-- ========================================== -->
+    <div id="appScreen" class="screen min-h-screen flex flex-col">
+        
+        <!-- Navbar -->
+        <nav class="sticky top-0 z-40 glass border-b border-gray-800">
+            <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold shadow-lg shadow-primary/20">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <div class="hidden sm:block">
+                        <h1 class="text-lg font-bold text-white">NEXUS <span class="gradient-text">AI PRO</span></h1>
+                        <p class="text-[10px] text-gray-400 font-mono tracking-widest uppercase">SaaS v2.0 • Firebase</p>
+                    </div>
+                </div>
+                
+                <div class="hidden lg:flex items-center gap-1 bg-gray-800/50 p-1 rounded-lg">
+                    <button onclick="navigateTo('dashboard')" data-nav="dashboard" class="nav-btn px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white transition">
+                        <i class="fas fa-chart-line mr-2"></i>Dashboard
+                    </button>
+                    <button onclick="navigateTo('generator')" data-nav="generator" class="nav-btn px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white transition">
+                        <i class="fas fa-wand-magic-sparkles mr-2"></i>Bilhetes
+                    </button>
+                    <button onclick="navigateTo('matches')" data-nav="matches" class="nav-btn px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white transition">
+                        <i class="fas fa-futbol mr-2"></i>Jogos Ao Vivo
+                    </button>
+                    <button onclick="navigateTo('history')" data-nav="history" class="nav-btn px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white transition">
+                        <i class="fas fa-history mr-2"></i>Histórico
+                    </button>
+                    <button onclick="navigateTo('plans')" data-nav="plans" class="nav-btn px-4 py-2 text-sm font-medium rounded-md text-gray-400 hover:text-white transition">
+                        <i class="fas fa-crown mr-2"></i>Planos
+                    </button>
+                </div>
+
+                <div class="flex items-center gap-3">
+                    <div class="hidden md:flex flex-col items-end">
+                        <span class="text-[10px] text-gray-400 uppercase tracking-wider">Banca</span>
+                        <span class="text-sm font-bold text-success font-mono" id="navBankroll">R$ 0,00</span>
+                    </div>
+                    <div class="relative">
+                        <button onclick="toggleUserMenu()" class="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center text-white font-bold">
+                            <span id="userInitial">U</span>
+                        </button>
+                        <div id="userMenu" class="hidden absolute right-0 top-12 w-56 glass rounded-xl p-2 shadow-2xl border border-gray-700">
+                            <div class="px-3 py-2 border-b border-gray-700 mb-2">
+                                <p class="text-sm font-bold text-white" id="menuUserName">Usuário</p>
+                                <p class="text-xs text-gray-400" id="menuUserEmail">email@ex.com</p>
+                                <span class="inline-block mt-1 px-2 py-0.5 text-[10px] bg-primary/20 text-primary rounded-full" id="menuUserPlan">PLANO FREE</span>
+                            </div>
+                            <button onclick="navigateTo('profile')" class="w-full text-left px-3 py-2 text-sm text-gray-300 hover:bg-gray-800 rounded-lg transition">
+                                <i class="fas fa-user mr-2"></i>Meu Perfil
+                            </button>
+                            <button onclick="handleLogout()" class="w-full text-left px-3 py-2 text-sm text-danger hover:bg-gray-800 rounded-lg transition">
+                                <i class="fas fa-sign-out-alt mr-2"></i>Sair
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Mobile Nav -->
+            <div class="lg:hidden border-t border-gray-800 flex overflow-x-auto custom-scrollbar">
+                <button onclick="navigateTo('dashboard')" data-nav="dashboard" class="nav-btn flex-1 min-w-max px-4 py-3 text-xs font-medium text-gray-400 hover:text-white transition">
+                    <i class="fas fa-chart-line block mb-1"></i>Dashboard
+                </button>
+                <button onclick="navigateTo('generator')" data-nav="generator" class="nav-btn flex-1 min-w-max px-4 py-3 text-xs font-medium text-gray-400 hover:text-white transition">
+                    <i class="fas fa-wand-magic-sparkles block mb-1"></i>Bilhetes
+                </button>
+                <button onclick="navigateTo('matches')" data-nav="matches" class="nav-btn flex-1 min-w-max px-4 py-3 text-xs font-medium text-gray-400 hover:text-white transition">
+                    <i class="fas fa-futbol block mb-1"></i>Jogos
+                </button>
+                <button onclick="navigateTo('history')" data-nav="history" class="nav-btn flex-1 min-w-max px-4 py-3 text-xs font-medium text-gray-400 hover:text-white transition">
+                    <i class="fas fa-history block mb-1"></i>Histórico
+                </button>
+                <button onclick="navigateTo('plans')" data-nav="plans" class="nav-btn flex-1 min-w-max px-4 py-3 text-xs font-medium text-gray-400 hover:text-white transition">
+                    <i class="fas fa-crown block mb-1"></i>Planos
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content Container -->
+        <main class="flex-grow container mx-auto px-4 py-8">
+
+            <!-- ========================================== -->
+            <!-- DASHBOARD                                  -->
+            <!-- ========================================== -->
+            <section id="dashboardView" class="screen active space-y-8">
+                <div>
+                    <h2 class="text-3xl font-bold text-white">Olá, <span id="dashboardUserName" class="gradient-text">Usuário</span> 👋</h2>
+                    <p class="text-gray-400 mt-1">Seu painel de performance e análises em tempo real</p>
+                </div>
+
+                <!-- Stats Cards -->
+                <div class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="glass rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs text-gray-400 uppercase tracking-wider">Banca Atual</span>
+                            <i class="fas fa-wallet text-primary"></i>
+                        </div>
+                        <p class="text-2xl font-bold text-white font-mono" id="statBankroll">R$ 0,00</p>
+                        <p class="text-xs text-success mt-1" id="statBankrollChange">+0% este mês</p>
+                    </div>
+                    <div class="glass rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs text-gray-400 uppercase tracking-wider">ROI</span>
+                            <i class="fas fa-chart-line text-success"></i>
+                        </div>
+                        <p class="text-2xl font-bold text-white font-mono" id="statROI">0%</p>
+                        <p class="text-xs text-gray-400 mt-1">Últimos 30 dias</p>
+                    </div>
+                    <div class="glass rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs text-gray-400 uppercase tracking-wider">Bilhetes</span>
+                            <i class="fas fa-ticket text-secondary"></i>
+                        </div>
+                        <p class="text-2xl font-bold text-white font-mono" id="statTickets">0</p>
+                        <p class="text-xs text-gray-400 mt-1" id="statWinRate">0% de acerto</p>
+                    </div>
+                    <div class="glass rounded-xl p-5">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-xs text-gray-400 uppercase tracking-wider">Plano</span>
+                            <i class="fas fa-crown text-warning"></i>
+                        </div>
+                        <p class="text-2xl font-bold text-white" id="statPlan">FREE</p>
+                        <button onclick="navigateTo('plans')" class="text-xs text-primary hover:underline mt-1">Fazer upgrade</button>
+                    </div>
+                </div>
+
+                <!-- Chart -->
+                <div class="glass rounded-2xl p-6">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 class="text-lg font-bold text-white">Evolução da Banca</h3>
+                            <p class="text-xs text-gray-400">Últimos 30 dias</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button class="px-3 py-1 text-xs bg-primary/20 text-primary rounded-md">30D</button>
+                            <button class="px-3 py-1 text-xs text-gray-400 hover:bg-gray-800 rounded-md">90D</button>
+                        </div>
+                    </div>
+                    <canvas id="bankrollChart" height="100"></canvas>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <button onclick="navigateTo('generator')" class="glass glass-hover rounded-xl p-6 text-left transition">
+                        <div class="w-12 h-12 rounded-lg bg-primary/20 flex items-center justify-center text-primary text-xl mb-3">
+                            <i class="fas fa-wand-magic-sparkles"></i>
+                        </div>
+                        <h4 class="font-bold text-white mb-1">Gerar Bilhete IA</h4>
+                        <p class="text-xs text-gray-400">Crie um bilhete otimizado em segundos</p>
+                    </button>
+                    <button onclick="navigateTo('matches')" class="glass glass-hover rounded-xl p-6 text-left transition">
+                        <div class="w-12 h-12 rounded-lg bg-secondary/20 flex items-center justify-center text-secondary text-xl mb-3">
+                            <i class="fas fa-futbol"></i>
+                        </div>
+                        <h4 class="font-bold text-white mb-1">Ver Jogos Ao Vivo</h4>
+                        <p class="text-xs text-gray-400">Odds atualizadas em tempo real</p>
+                    </button>
+                    <button onclick="openAIChat()" class="glass glass-hover rounded-xl p-6 text-left transition">
+                        <div class="w-12 h-12 rounded-lg bg-success/20 flex items-center justify-center text-success text-xl mb-3">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h4 class="font-bold text-white mb-1">Falar com IA</h4>
+                        <p class="text-xs text-gray-400">Pergunte qualquer coisa à IA Universal</p>
+                    </button>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- GERADOR DE BILHETES                        -->
+            <!-- ========================================== -->
+            <section id="generatorView" class="screen space-y-6">
+                <div>
+                    <h2 class="text-3xl font-bold text-white">Gerador de <span class="gradient-text">Bilhetes IA</span></h2>
+                    <p class="text-gray-400 mt-1">Motor preditivo com análise de +EV (Valor Esperado)</p>
+                </div>
+
+                <div class="glass rounded-2xl p-6">
+                    <div class="flex flex-col md:flex-row justify-between items-center gap-4 mb-6">
+                        <div class="flex gap-2 bg-gray-800 p-1 rounded-lg">
+                            <button onclick="setRisk('conservative')" id="btn-conservative" class="risk-btn px-4 py-2 rounded-md text-sm font-medium transition bg-primary text-white">Conservador</button>
+                            <button onclick="setRisk('balanced')" id="btn-balanced" class="risk-btn px-4 py-2 rounded-md text-sm font-medium text-gray-400">Equilibrado</button>
+                            <button onclick="setRisk('aggressive')" id="btn-aggressive" class="risk-btn px-4 py-2 rounded-md text-sm font-medium text-gray-400">Ousado</button>
+                        </div>
+                        <button onclick="generateLuckyTicket()" class="btn-primary text-white font-bold py-3 px-6 rounded-lg flex items-center gap-2">
+                            <i class="fas fa-wand-magic-sparkles"></i> Gerar Bilhete
+                        </button>
+                    </div>
+
+                    <div id="ticketResult" class="hidden">
+                        <div class="border border-dashed border-gray-700 rounded-xl p-6 bg-gray-900/50">
+                            <div class="flex justify-between items-start mb-6">
+                                <div>
+                                    <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                                        <i class="fas fa-ticket text-primary"></i> Bilhete #<span id="ticketId">0000</span>
+                                    </h3>
+                                    <p class="text-sm text-gray-400 mt-1">Confiança IA: <span class="text-success font-bold" id="ticketConfidence">0%</span></p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-xs text-gray-500 uppercase">Odd Total</p>
+                                    <p class="text-3xl font-bold text-secondary font-mono" id="ticketOdd">0.00</p>
+                                </div>
+                            </div>
+
+                            <div class="space-y-3 mb-6" id="ticketSelections"></div>
+
+                            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4 border-t border-gray-800">
+                                <div>
+                                    <label class="text-xs text-gray-500 block mb-1">Valor da Aposta</label>
+                                    <div class="relative">
+                                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">R$</span>
+                                        <input type="number" id="stakeInput" value="20" oninput="updatePotentialReturn()" class="w-full bg-gray-800 border border-gray-700 rounded-lg py-2 pl-8 pr-4 text-white font-mono focus:outline-none focus:border-primary">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="text-xs text-gray-500 block mb-1">Retorno Potencial</label>
+                                    <div class="bg-gray-800/50 rounded-lg p-2 border border-gray-700">
+                                        <p class="text-xl font-bold text-success font-mono" id="potentialReturn">R$ 0,00</p>
+                                    </div>
+                                </div>
+                                <div class="flex gap-2">
+                                    <button onclick="saveTicket()" class="flex-1 bg-success hover:bg-success/80 text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center gap-2">
+                                        <i class="fas fa-save"></i> Salvar
+                                    </button>
+                                    <button onclick="copyTicket()" class="flex-1 bg-gray-800 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg border border-gray-700 transition flex items-center justify-center gap-2">
+                                        <i class="fas fa-copy"></i> Copiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- JOGOS AO VIVO (Realtime DB)                -->
+            <!-- ========================================== -->
+            <section id="matchesView" class="screen space-y-6">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-3xl font-bold text-white">Jogos <span class="gradient-text">Ao Vivo</span></h2>
+                        <p class="text-gray-400 mt-1 flex items-center gap-2">
+                            <span class="relative w-2 h-2 bg-success rounded-full live-dot"></span>
+                            Odds atualizadas em tempo real via Firebase
+                        </p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="matchesGrid"></div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- HISTÓRICO (Firestore)                      -->
+            <!-- ========================================== -->
+            <section id="historyView" class="screen space-y-6">
+                <div>
+                    <h2 class="text-3xl font-bold text-white">Histórico de <span class="gradient-text">Bilhetes</span></h2>
+                    <p class="text-gray-400 mt-1">Todos os seus bilhetes salvos no Firestore</p>
+                </div>
+
+                <div id="historyList" class="space-y-4">
+                    <div class="text-center py-12 text-gray-500">
+                        <i class="fas fa-inbox text-4xl mb-3"></i>
+                        <p>Nenhum bilhete salvo ainda</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- PLANOS (Monetização)                       -->
+            <!-- ========================================== -->
+            <section id="plansView" class="screen space-y-6">
+                <div class="text-center">
+                    <h2 class="text-3xl font-bold text-white">Escolha seu <span class="gradient-text">Plano</span></h2>
+                    <p class="text-gray-400 mt-2">Desbloqueie todo o poder da IA preditiva</p>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                    <div class="plan-card glass rounded-2xl p-6">
+                        <h3 class="text-xl font-bold text-white mb-2">Free</h3>
+                        <p class="text-3xl font-bold text-white mb-4">R$ 0<span class="text-sm text-gray-400">/mês</span></p>
+                        <ul class="space-y-2 text-sm text-gray-300 mb-6">
+                            <li><i class="fas fa-check text-success mr-2"></i>3 bilhetes/dia</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Ligas principais</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Análise básica</li>
+                            <li class="text-gray-600"><i class="fas fa-times text-gray-700 mr-2"></i>Bilhetes ousados</li>
+                            <li class="text-gray-600"><i class="fas fa-times text-gray-700 mr-2"></i>Alertas push</li>
+                        </ul>
+                        <button class="w-full py-2 rounded-lg bg-gray-800 text-gray-400 cursor-not-allowed" disabled>Plano Atual</button>
+                    </div>
+
+                    <div class="plan-card featured glass rounded-2xl p-6 relative">
+                        <span class="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-primary to-secondary text-white text-xs font-bold px-3 py-1 rounded-full">MAIS POPULAR</span>
+                        <h3 class="text-xl font-bold text-white mb-2">Pro</h3>
+                        <p class="text-3xl font-bold text-white mb-4">R$ 49<span class="text-sm text-gray-400">/mês</span></p>
+                        <ul class="space-y-2 text-sm text-gray-300 mb-6">
+                            <li><i class="fas fa-check text-success mr-2"></i>Bilhetes ilimitados</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Todas as ligas</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Análise profunda</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Todos os níveis</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Alertas de odds</li>
+                        </ul>
+                        <button onclick="subscribePlan('pro')" class="w-full btn-primary text-white font-bold py-2 rounded-lg">Assinar Pro</button>
+                    </div>
+
+                    <div class="plan-card glass rounded-2xl p-6">
+                        <h3 class="text-xl font-bold text-white mb-2">Elite</h3>
+                        <p class="text-3xl font-bold text-white mb-4">R$ 149<span class="text-sm text-gray-400">/mês</span></p>
+                        <ul class="space-y-2 text-sm text-gray-300 mb-6">
+                            <li><i class="fas fa-check text-success mr-2"></i>Tudo do Pro</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>API exclusiva</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Suporte VIP 24/7</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>IA personalizada</li>
+                            <li><i class="fas fa-check text-success mr-2"></i>Relatórios PDF</li>
+                        </ul>
+                        <button onclick="subscribePlan('elite')" class="w-full btn-primary text-white font-bold py-2 rounded-lg">Assinar Elite</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ========================================== -->
+            <!-- PERFIL                                     -->
+            <!-- ========================================== -->
+            <section id="profileView" class="screen space-y-6">
+                <h2 class="text-3xl font-bold text-white">Meu <span class="gradient-text">Perfil</span></h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-lg font-bold text-white mb-4">Dados da Conta</h3>
+                        <div class="space-y-3">
+                            <div>
+                                <label class="text-xs text-gray-400">Nome</label>
+                                <input type="text" id="profileName" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white mt-1">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">Email</label>
+                                <input type="email" id="profileEmail" disabled class="w-full bg-gray-800/50 border border-gray-700 rounded-lg px-4 py-2 text-gray-400 mt-1">
+                            </div>
+                            <div>
+                                <label class="text-xs text-gray-400">Banca Inicial</label>
+                                <input type="number" id="profileBankroll" class="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white mt-1">
+                            </div>
+                            <button onclick="updateProfile()" class="w-full btn-primary text-white font-bold py-2 rounded-lg mt-4">Salvar Alterações</button>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-2xl p-6">
+                        <h3 class="text-lg font-bold text-white mb-4">Estatísticas Gerais</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span class="text-sm text-gray-400">Membro desde</span>
+                                <span class="text-sm text-white font-mono" id="profileSince">-</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span class="text-sm text-gray-400">Total de bilhetes</span>
+                                <span class="text-sm text-white font-mono" id="profileTotalTickets">0</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span class="text-sm text-gray-400">Taxa de acerto</span>
+                                <span class="text-sm text-success font-mono" id="profileWinRate">0%</span>
+                            </div>
+                            <div class="flex justify-between items-center p-3 bg-gray-800/50 rounded-lg">
+                                <span class="text-sm text-gray-400">Lucro total</span>
+                                <span class="text-sm text-success font-mono" id="profileProfit">R$ 0,00</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="border-t border-gray-800 py-6 mt-12">
+            <div class="container mx-auto px-4 text-center">
+                <p class="text-gray-500 text-sm">© 2026 NEXUS BET AI PRO • Powered by Firebase</p>
+                <p class="text-gray-600 text-xs mt-1">Aposte com responsabilidade. Proibido para menores de 18 anos.</p>
+            </div>
+        </footer>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- CHAT IA UNIVERSAL (Flutuante)              -->
+    <!-- ========================================== -->
+    <div class="fixed bottom-6 right-6 z-50">
+        <div id="chatWindow" class="hidden mb-4 w-[350px] md:w-[400px] h-[500px] glass rounded-2xl flex flex-col overflow-hidden shadow-2xl border border-primary/30">
+            <div class="bg-gray-900 p-4 border-b border-gray-800 flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-white text-sm">Nexus AI Universal</h4>
+                        <p class="text-[10px] text-success flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-success"></span> Online</p>
+                    </div>
+                </div>
+                <button onclick="toggleChat()" class="text-gray-400 hover:text-white"><i class="fas fa-times"></i></button>
+            </div>
+            <div id="chatMessages" class="flex-1 overflow-y-auto custom-scrollbar p-4 space-y-4 bg-gray-900/50">
+                <div class="flex gap-3">
+                    <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs flex-shrink-0"><i class="fas fa-robot"></i></div>
+                    <div class="bg-gray-800 rounded-2xl rounded-tl-none p-3 text-sm text-gray-200 border border-gray-700 max-w-[85%]">
+                        Olá! Sou a IA Universal da Nexus. Posso responder sobre <strong>qualquer assunto</strong>: programação, matemática, conselhos, análises esportivas ou conversar livremente. Como posso ajudar?
+                    </div>
+                </div>
+            </div>
+            <form id="chatForm" class="p-3 bg-gray-900 border-t border-gray-800 flex gap-2" onsubmit="handleChatSubmit(event)">
+                <input type="text" id="chatInput" placeholder="Pergunte qualquer coisa..." class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-primary">
+                <button type="submit" class="bg-primary hover:bg-primary/80 text-white w-10 h-10 rounded-lg flex items-center justify-center transition"><i class="fas fa-paper-plane text-sm"></i></button>
+            </form>
+        </div>
+        <button onclick="toggleChat()" class="w-14 h-14 bg-gradient-to-r from-primary to-secondary rounded-full shadow-lg shadow-primary/40 flex items-center justify-center text-white text-xl hover:scale-110 transition-transform">
+            <i class="fas fa-comment-dots"></i>
+        </button>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="fixed top-20 right-4 z-50 space-y-2"></div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="hidden fixed inset-0 z-[100] bg-dark/80 backdrop-blur-sm flex items-center justify-center">
+        <div class="text-center">
+            <div class="loading-spinner mx-auto mb-4"></div>
+            <p class="text-gray-400 text-sm" id="loadingText">Carregando...</p>
+        </div>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- JAVASCRIPT PRINCIPAL                       -->
+    <!-- ========================================== -->
+    <script>
+        // ==========================================
+        // 🔥 FIREBASE CONFIGURATION
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyCQzb96nvE_jxVEDanEqgpQhAM-PLIYLqA",
+            authDomain: "nexus-bet-ia.firebaseapp.com",
+            projectId: "nexus-bet-ia",
+            storageBucket: "nexus-bet-ia.firebasestorage.app",
+            messagingSenderId: "686530947426",
+            appId: "1:686530947426:web:6a11d647988eed4dcce43b",
+            databaseURL: "https://nexus-bet-ia-default-rtdb.firebaseio.com"
+        };
+
+        // Inicializa Firebase
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const rtdb = firebase.database();
+
+        // ==========================================
+        // STATE GLOBAL
+        // ==========================================
+        let currentUser = null;
+        let userData = null;
+        let currentRisk = 'conservative';
+        let currentTicket = null;
+        let bankrollChart = null;
+
+        // Dados de jogos (simulando API-Football)
+        const matchesData = [
+            { id: 1, home: "Flamengo", away: "Palmeiras", league: "Brasileirão", time: "21:30", confidence: 82, prediction: "Casa ou Empate", odd: 1.45, xgHome: 1.8, xgAway: 1.2 },
+            { id: 2, home: "Real Madrid", away: "Man City", league: "Champions", time: "16:00", confidence: 75, prediction: "Ambas Marcam", odd: 1.65, xgHome: 2.1, xgAway: 1.9 },
+            { id: 3, home: "Liverpool", away: "Arsenal", league: "Premier League", time: "13:30", confidence: 68, prediction: "Over 2.5 Gols", odd: 1.75, xgHome: 2.3, xgAway: 1.7 },
+            { id: 4, home: "Boca Juniors", away: "River Plate", league: "Libertadores", time: "21:00", confidence: 60, prediction: "Under 2.5 Gols", odd: 1.55, xgHome: 1.1, xgAway: 0.9 },
+            { id: 5, home: "Bayern", away: "Dortmund", league: "Bundesliga", time: "13:30", confidence: 88, prediction: "Vitória Casa", odd: 1.50, xgHome: 2.8, xgAway: 1.4 },
+            { id: 6, home: "Inter Miami", away: "LA Galaxy", league: "MLS", time: "20:30", confidence: 71, prediction: "Over 3.5 Gols", odd: 2.10, xgHome: 2.5, xgAway: 1.8 }
+        ];
+
+        // ==========================================
+        // 🔐 AUTENTICAÇÃO
+        // ==========================================
+        function switchAuthTab(tab) {
+            document.getElementById('loginForm').classList.toggle('hidden', tab !== 'login');
+            document.getElementById('registerForm').classList.toggle('hidden', tab !== 'register');
+            document.getElementById('tab-login').classList.toggle('bg-primary', tab === 'login');
+            document.getElementById('tab-login').classList.toggle('text-white', tab === 'login');
+            document.getElementById('tab-login').classList.toggle('text-gray-400', tab !== 'login');
+            document.getElementById('tab-register').classList.toggle('bg-primary', tab === 'register');
+            document.getElementById('tab-register').classList.toggle('text-white', tab === 'register');
+            document.getElementById('tab-register').classList.toggle('text-gray-400', tab !== 'register');
+            document.getElementById('authError').classList.add('hidden');
+        }
+
+        async function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            showLoading('Entrando...');
+            
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                showToast('Login realizado com sucesso!', 'success');
+            } catch (error) {
+                showAuthError(error.message);
+                hideLoading();
+            }
+        }
+
+        async function handleRegister(e) {
+            e.preventDefault();
+            const name = document.getElementById('regName').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+            const bankroll = parseFloat(document.getElementById('regBankroll').value);
+            
+            showLoading('Criando sua conta...');
+            
+            try {
+                const cred = await auth.createUserWithEmailAndPassword(email, password);
+                
+                // Cria documento do usuário no Firestore
+                await db.collection('users').doc(cred.user.uid).set({
+                    name: name,
+                    email: email,
+                    bankroll: bankroll,
+                    initialBankroll: bankroll,
+                    plan: 'free',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    ticketsCount: 0,
+                    winsCount: 0,
+                    totalProfit: 0,
+                    provider: 'email'
+                });
+                
+                showToast('Conta criada com sucesso!', 'success');
+            } catch (error) {
+                showAuthError(error.message);
+                hideLoading();
+            }
+        }
+
+        // ==========================================================
+        // 🆕 NOVA FUNÇÃO: LOGIN COM GOOGLE
+        // ==========================================================
+        async function handleGoogleLogin() {
+            showLoading('Conectando com Google...');
+            try {
+                const provider = new firebase.auth.GoogleAuthProvider();
+                const result = await auth.signInWithPopup(provider);
+                const user = result.user;
+
+                // Verifica se o usuário já existe no Firestore (coleção 'users')
+                const userDoc = await db.collection('users').doc(user.uid).get();
+
+                if (!userDoc.exists) {
+                    // Primeiro acesso: cria o documento padrão com dados do Google
+                    await db.collection('users').doc(user.uid).set({
+                        name: user.displayName || 'Usuário Google',
+                        email: user.email,
+                        bankroll: 1000, // Banca inicial padrão
+                        initialBankroll: 1000,
+                        plan: 'free',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        ticketsCount: 0,
+                        winsCount: 0,
+                        totalProfit: 0,
+                        provider: 'google'
+                    });
+                    showToast('Conta criada com sucesso via Google!', 'success');
+                } else {
+                    showToast('Login realizado com sucesso!', 'success');
+                }
+                
+                // O listener onAuthStateChanged cuidará automaticamente de mostrar a tela do app
+            } catch (error) {
+                console.error("Erro no login com Google:", error);
+                // Trata especificamente o erro de provedor não habilitado no console
+                if (error.code === 'auth/operation-not-allowed') {
+                    showAuthError('O login com Google não está habilitado no Console do Firebase.');
+                } else {
+                    showAuthError(error.message);
+                }
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function showAuthError(msg) {
+            const el = document.getElementById('authError');
+            el.textContent = msg.replace('Firebase: ', '').replace(/\(auth\/.*\)/, '');
+            el.classList.remove('hidden');
+        }
+
+        async function handleLogout() {
+            await auth.signOut();
+            showToast('Você saiu da conta', 'info');
+        }
+
+        // Listener de estado de autenticação
+        auth.onAuthStateChanged(async (user) => {
+            if (user) {
+                currentUser = user;
+                await loadUserData();
+                showApp();
+            } else {
+                currentUser = null;
+                userData = null;
+                showAuth();
+            }
+            hideLoading();
+        });
+
+        async function loadUserData() {
+            const doc = await db.collection('users').doc(currentUser.uid).get();
+            if (doc.exists) {
+                userData = doc.data();
+                updateUIWithUserData();
+            }
+        }
+
+        function updateUIWithUserData() {
+            if (!userData) return;
+            
+            // Navbar
+            document.getElementById('navBankroll').textContent = formatCurrency(userData.bankroll);
+            document.getElementById('userInitial').textContent = userData.name.charAt(0).toUpperCase();
+            document.getElementById('menuUserName').textContent = userData.name;
+            document.getElementById('menuUserEmail').textContent = userData.email;
+            document.getElementById('menuUserPlan').textContent = `PLANO ${userData.plan.toUpperCase()}`;
+            
+            // Dashboard
+            document.getElementById('dashboardUserName').textContent = userData.name.split(' ')[0];
+            document.getElementById('statBankroll').textContent = formatCurrency(userData.bankroll);
+            const roi = ((userData.bankroll - userData.initialBankroll) / userData.initialBankroll * 100).toFixed(1);
+            document.getElementById('statROI').textContent = `${roi}%`;
+            document.getElementById('statBankrollChange').textContent = `${roi > 0 ? '+' : ''}${roi}% este mês`;
+            document.getElementById('statTickets').textContent = userData.ticketsCount || 0;
+            const winRate = userData.ticketsCount > 0 ? ((userData.winsCount / userData.ticketsCount) * 100).toFixed(0) : 0;
+            document.getElementById('statWinRate').textContent = `${winRate}% de acerto`;
+            document.getElementById('statPlan').textContent = userData.plan.toUpperCase();
+            
+            // Profile
+            document.getElementById('profileName').value = userData.name;
+            document.getElementById('profileEmail').value = userData.email;
+            document.getElementById('profileBankroll').value = userData.bankroll;
+            document.getElementById('profileTotalTickets').textContent = userData.ticketsCount || 0;
+            document.getElementById('profileWinRate').textContent = `${winRate}%`;
+            document.getElementById('profileProfit').textContent = formatCurrency(userData.totalProfit || 0);
+            if (userData.createdAt) {
+                const date = userData.createdAt.toDate();
+                document.getElementById('profileSince').textContent = date.toLocaleDateString('pt-BR');
+            }
+            
+            renderChart();
+        }
+
+        // ==========================================
+        // 🧭 NAVEGAÇÃO
+        // ==========================================
+        function navigateTo(view) {
+            document.querySelectorAll('#appScreen main section').forEach(s => s.classList.remove('active'));
+            document.getElementById(`${view}View`).classList.add('active');
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white');
+                btn.classList.add('text-gray-400');
+            });
+            document.querySelectorAll(`[data-nav="${view}"]`).forEach(btn => {
+                btn.classList.add('bg-primary', 'text-white');
+                btn.classList.remove('text-gray-400');
+            });
+            
+            document.getElementById('userMenu').classList.add('hidden');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            if (view === 'history') loadHistory();
+            if (view === 'matches') renderMatches();
+        }
+
+        function showApp() {
+            document.getElementById('authScreen').classList.remove('active');
+            document.getElementById('appScreen').classList.add('active');
+            navigateTo('dashboard');
+        }
+
+        function showAuth() {
+            document.getElementById('appScreen').classList.remove('active');
+            document.getElementById('authScreen').classList.add('active');
+        }
+
+        function toggleUserMenu() {
+            document.getElementById('userMenu').classList.toggle('hidden');
+        }
+
+        // ==========================================
+        // 🎫 GERADOR DE BILHETES
+        // ==========================================
+        function setRisk(level) {
+            currentRisk = level;
+            document.querySelectorAll('.risk-btn').forEach(btn => {
+                btn.classList.remove('bg-primary', 'text-white');
+                btn.classList.add('text-gray-400');
+            });
+            const btn = document.getElementById(`btn-${level}`);
+            btn.classList.add('bg-primary', 'text-white');
+            btn.classList.remove('text-gray-400');
+        }
+
+        function generateLuckyTicket() {
+            // Verifica limite do plano free
+            if (userData && userData.plan === 'free') {
+                const today = new Date().toDateString();
+                const todayTickets = userData.dailyTickets && userData.dailyTickets[today] ? userData.dailyTickets[today] : 0;
+                if (todayTickets >= 3) {
+                    showToast('Limite de 3 bilhetes/dia no plano FREE. Faça upgrade!', 'warning');
+                    navigateTo('plans');
+                    return;
+                }
+            }
+
+            let pool = [];
+            if (currentRisk === 'conservative') {
+                pool = matchesData.filter(m => m.confidence >= 80 && m.odd <= 1.60);
+            } else if (currentRisk === 'balanced') {
+                pool = matchesData.filter(m => m.confidence >= 70 && m.odd <= 1.90);
+            } else {
+                pool = matchesData.filter(m => m.odd >= 1.70);
+            }
+
+            const shuffled = [...pool].sort(() => 0.5 - Math.random());
+            const selected = shuffled.slice(0, currentRisk === 'aggressive' ? 3 : 2);
+
+            if (selected.length === 0) {
+                showToast('Nenhuma combinação encontrada. Tente outro nível.', 'warning');
+                return;
+            }
+
+            let totalOdd = 1;
+            let totalConf = 0;
+            let html = '';
+
+            selected.forEach(match => {
+                totalOdd *= match.odd;
+                totalConf += match.confidence;
+                html += `
+                    <div class="flex justify-between items-center bg-gray-800/50 p-3 rounded-lg border border-gray-700">
+                        <div>
+                            <p class="text-xs text-gray-500 mb-1">${match.league} • ${match.time}</p>
+                            <p class="text-sm font-bold text-white">${match.home} x ${match.away}</p>
+                            <p class="text-xs text-primary mt-1"><i class="fas fa-robot mr-1"></i> ${match.prediction}</p>
+                        </div>
+                        <div class="text-right">
+                            <span class="block text-lg font-bold text-secondary font-mono">${match.odd.toFixed(2)}</span>
+                            <span class="text-[10px] text-gray-500">Conf: ${match.confidence}%</span>
+                        </div>
+                    </div>
+                `;
+            });
+
+            currentTicket = {
+                id: Math.floor(Math.random() * 9000) + 1000,
+                risk: currentRisk,
+                selections: selected,
+                totalOdd: totalOdd,
+                confidence: Math.round(totalConf / selected.length),
+                createdAt: new Date()
+            };
+
+            document.getElementById('ticketId').textContent = currentTicket.id;
+            document.getElementById('ticketConfidence').textContent = `${currentTicket.confidence}%`;
+            document.getElementById('ticketOdd').textContent = totalOdd.toFixed(2);
+            document.getElementById('ticketSelections').innerHTML = html;
+            document.getElementById('ticketResult').classList.remove('hidden');
+            updatePotentialReturn();
+        }
+
+        function updatePotentialReturn() {
+            const odd = parseFloat(document.getElementById('ticketOdd').textContent) || 1;
+            const stake = parseFloat(document.getElementById('stakeInput').value) || 0;
+            document.getElementById('potentialReturn').textContent = formatCurrency(stake * odd);
+        }
+
+        async function saveTicket() {
+            if (!currentTicket) return;
+            
+            const stake = parseFloat(document.getElementById('stakeInput').value) || 0;
+            
+            try {
+                await db.collection('users').doc(currentUser.uid).collection('tickets').add({
+                    ticketId: currentTicket.id,
+                    risk: currentTicket.risk,
+                    selections: currentTicket.selections,
+                    totalOdd: currentTicket.totalOdd,
+                    confidence: currentTicket.confidence,
+                    stake: stake,
+                    potentialReturn: stake * currentTicket.totalOdd,
+                    status: 'pending',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                
+                // Atualiza contador do usuário
+                const today = new Date().toDateString();
+                const dailyTickets = userData.dailyTickets || {};
+                dailyTickets[today] = (dailyTickets[today] || 0) + 1;
+                
+                await db.collection('users').doc(currentUser.uid).update({
+                    ticketsCount: firebase.firestore.FieldValue.increment(1),
+                    dailyTickets: dailyTickets
+                });
+                
+                userData.ticketsCount = (userData.ticketsCount || 0) + 1;
+                userData.dailyTickets = dailyTickets;
+                updateUIWithUserData();
+                
+                showToast('Bilhete salvo com sucesso!', 'success');
+            } catch (error) {
+                showToast('Erro ao salvar: ' + error.message, 'error');
+            }
+        }
+
+        function copyTicket() {
+            if (!currentTicket) return;
+            const selections = currentTicket.selections.map(s => 
+                `${s.home} x ${s.away}: ${s.prediction} (${s.odd.toFixed(2)})`
+            ).join('\n');
+            const text = `🎫 Bilhete Nexus AI #${currentTicket.id}\n\n${selections}\n\n📊 Odd Total: ${currentTicket.totalOdd.toFixed(2)}\n🎯 Confiança: ${currentTicket.confidence}%`;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('Bilhete copiado!', 'success');
+            });
+        }
+
+        // ==========================================
+        // ⚽ JOGOS AO VIVO (Realtime DB)
+        // ==========================================
+        function renderMatches() {
+            const grid = document.getElementById('matchesGrid');
+            
+            // Escuta mudanças em tempo real no Firebase Realtime DB
+            rtdb.ref('liveMatches').on('value', (snapshot) => {
+                const liveData = snapshot.val();
+                const matches = liveData || matchesData;
+                
+                grid.innerHTML = matches.map(match => `
+                    <div class="glass glass-hover rounded-xl p-5 transition">
+                        <div class="flex justify-between items-start mb-4">
+                            <span class="text-[10px] font-bold uppercase tracking-wider text-gray-500 bg-gray-800 px-2 py-1 rounded">${match.league}</span>
+                            <div class="flex items-center gap-1">
+                                <span class="relative w-2 h-2 bg-success rounded-full live-dot"></span>
+                                <span class="text-xs font-mono text-success">AO VIVO</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between items-center mb-4">
+                            <div class="text-center flex-1">
+                                <div class="w-12 h-12 bg-gray-800 rounded-full mx-auto mb-2 flex items-center justify-center text-xl font-bold text-gray-300 border border-gray-700">
+                                    ${match.home.substring(0, 2).toUpperCase()}
+                                </div>
+                                <p class="text-sm font-semibold text-white">${match.home}</p>
+                            </div>
+                            <div class="text-gray-600 font-bold text-xs px-2">VS</div>
+                            <div class="text-center flex-1">
+                                <div class="w-12 h-12 bg-gray-800 rounded-full mx-auto mb-2 flex items-center justify-center text-xl font-bold text-gray-300 border border-gray-700">
+                                    ${match.away.substring(0, 2).toUpperCase()}
+                                </div>
+                                <p class="text-sm font-semibold text-white">${match.away}</p>
+                            </div>
+                        </div>
+                        <div class="border-t border-gray-800 pt-4 flex justify-between items-center">
+                            <div>
+                                <p class="text-[10px] text-gray-500 uppercase">IA Recomenda</p>
+                                <p class="text-sm font-bold text-primary">${match.prediction}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-[10px] text-gray-500 uppercase">Odd</p>
+                                <p class="text-lg font-bold text-secondary font-mono">${match.odd.toFixed(2)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            });
+        }
+
+        // ==========================================
+        // 📊 HISTÓRICO (Firestore)
+        // ==========================================
+        async function loadHistory() {
+            const container = document.getElementById('historyList');
+            container.innerHTML = '<div class="text-center py-12 text-gray-500"><div class="loading-spinner mx-auto mb-3"></div><p>Carregando histórico...</p></div>';
+            
+            try {
+                const snapshot = await db.collection('users').doc(currentUser.uid)
+                    .collection('tickets').orderBy('createdAt', 'desc').limit(20).get();
+                
+                if (snapshot.empty) {
+                    container.innerHTML = `
+                        <div class="text-center py-12 text-gray-500">
+                            <i class="fas fa-inbox text-4xl mb-3"></i>
+                            <p>Nenhum bilhete salvo ainda</p>
+                            <button onclick="navigateTo('generator')" class="mt-4 btn-primary text-white px-6 py-2 rounded-lg">Gerar Primeiro Bilhete</button>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = snapshot.docs.map(doc => {
+                    const t = doc.data();
+                    const date = t.createdAt ? t.createdAt.toDate().toLocaleDateString('pt-BR') : '-';
+                    const statusColors = {
+                        pending: 'bg-warning/20 text-warning',
+                        won: 'bg-success/20 text-success',
+                        lost: 'bg-danger/20 text-danger'
+                    };
+                    const statusLabels = { pending: 'Pendente', won: 'Ganho', lost: 'Perdido' };
+                    
+                    return `
+                        <div class="glass rounded-xl p-5">
+                            <div class="flex justify-between items-start mb-3">
+                                <div>
+                                    <h4 class="font-bold text-white">Bilhete #${t.ticketId}</h4>
+                                    <p class="text-xs text-gray-400">${date} • ${t.risk}</p>
+                                </div>
+                                <span class="px-3 py-1 text-xs font-bold rounded-full ${statusColors[t.status]}">${statusLabels[t.status]}</span>
+                            </div>
+                            <div class="space-y-2 mb-3">
+                                ${t.selections.map(s => `
+                                    <div class="flex justify-between text-sm">
+                                        <span class="text-gray-300">${s.home} x ${s.away}</span>
+                                        <span class="text-primary font-mono">${s.prediction}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="flex justify-between items-center pt-3 border-t border-gray-800">
+                                <div>
+                                    <p class="text-[10px] text-gray-500">Aposta</p>
+                                    <p class="text-sm font-bold text-white">${formatCurrency(t.stake)}</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-[10px] text-gray-500">Odd</p>
+                                    <p class="text-sm font-bold text-secondary font-mono">${t.totalOdd.toFixed(2)}</p>
+                                </div>
+                                <div class="text-right">
+                                    <p class="text-[10px] text-gray-500">Retorno</p>
+                                    <p class="text-sm font-bold text-success font-mono">${formatCurrency(t.potentialReturn)}</p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                container.innerHTML = `<div class="text-center py-12 text-danger">Erro ao carregar: ${error.message}</div>`;
+            }
+        }
+
+        // ==========================================
+        // 📈 GRÁFICO (Chart.js)
+        // ==========================================
+        function renderChart() {
+            const ctx = document.getElementById('bankrollChart');
+            if (!ctx) return;
+            
+            if (bankrollChart) bankrollChart.destroy();
+            
+            // Dados simulados (em produção, viriam do Firestore)
+            const labels = Array.from({length: 30}, (_, i) => `${30-i}d`);
+            const data = [];
+            let value = userData.initialBankroll;
+            for (let i = 0; i < 30; i++) {
+                value += (Math.random() - 0.4) * 50;
+                data.push(Math.max(value, 0));
+            }
+            data[data.length - 1] = userData.bankroll;
+            
+            bankrollChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Banca (R$)',
+                        data: data,
+                        borderColor: '#8b5cf6',
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        pointRadius: 0,
+                        pointHoverRadius: 6,
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#111827',
+                            borderColor: '#8b5cf6',
+                            borderWidth: 1,
+                            titleColor: '#fff',
+                            bodyColor: '#fff'
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { color: '#6b7280', maxTicksLimit: 10 }
+                        },
+                        y: {
+                            grid: { color: 'rgba(75, 85, 99, 0.2)' },
+                            ticks: { color: '#6b7280', callback: v => 'R$ ' + v }
+                        }
+                    }
+                }
+            });
+        }
+
+        // ==========================================
+        // 👤 PERFIL
+        // ==========================================
+        async function updateProfile() {
+            const name = document.getElementById('profileName').value;
+            const bankroll = parseFloat(document.getElementById('profileBankroll').value);
+            
+            try {
+                await db.collection('users').doc(currentUser.uid).update({
+                    name: name,
+                    bankroll: bankroll
+                });
+                userData.name = name;
+                userData.bankroll = bankroll;
+                updateUIWithUserData();
+                showToast('Perfil atualizado!', 'success');
+            } catch (error) {
+                showToast('Erro: ' + error.message, 'error');
+            }
+        }
+
+        // ==========================================
+        // 💳 PLANOS (Integração Stripe/MercadoPago)
+        // ==========================================
+        async function subscribePlan(plan) {
+            showToast(`Redirecionando para pagamento do plano ${plan.toUpperCase()}...`, 'info');
+            
+            // Simulação: após "pagamento", atualiza o plano
+            setTimeout(async () => {
+                try {
+                    await db.collection('users').doc(currentUser.uid).update({
+                        plan: plan,
+                        planActivatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    });
+                    userData.plan = plan;
+                    updateUIWithUserData();
+                    showToast(`Plano ${plan.toUpperCase()} ativado com sucesso!`, 'success');
+                    navigateTo('dashboard');
+                } catch (error) {
+                    showToast('Erro ao ativar plano: ' + error.message, 'error');
+                }
+            }, 2000);
+        }
+
+        // ==========================================
+        // 🤖 CHAT IA UNIVERSAL
+        // ==========================================
+        function toggleChat() {
+            document.getElementById('chatWindow').classList.toggle('hidden');
+        }
+        function openAIChat() {
+            document.getElementById('chatWindow').classList.remove('hidden');
+            document.getElementById('chatInput').focus();
+        }
+
+        function handleChatSubmit(e) {
+            e.preventDefault();
+            const input = document.getElementById('chatInput');
+            const msg = input.value.trim();
+            if (!msg) return;
+            
+            addChatMessage(msg, 'user');
+            input.value = '';
+            
+            setTimeout(() => {
+                const response = generateUniversalAIResponse(msg);
+                addChatMessage(response, 'ai');
+            }, 800 + Math.random() * 800);
+        }
+
+        function addChatMessage(text, sender) {
+            const container = document.getElementById('chatMessages');
+            const div = document.createElement('div');
+            div.className = 'flex gap-3';
+            
+            if (sender === 'user') {
+                div.className += ' flex-row-reverse';
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center text-white text-xs flex-shrink-0"><i class="fas fa-user"></i></div>
+                    <div class="bg-primary text-white rounded-2xl rounded-tr-none p-3 text-sm max-w-[85%]">${escapeHtml(text)}</div>
+                `;
+            } else {
+                const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+                                      .replace(/\n/g, '<br>')
+                                      .replace(/`(.*?)`/g, '<code class="bg-gray-950 px-1.5 py-0.5 rounded text-primary font-mono text-xs">$1</code>');
+                div.innerHTML = `
+                    <div class="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-primary text-xs flex-shrink-0"><i class="fas fa-robot"></i></div>
+                    <div class="bg-gray-800 rounded-2xl rounded-tl-none p-3 text-sm text-gray-200 border border-gray-700 max-w-[85%] leading-relaxed">${formatted}</div>
+                `;
+            }
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function generateUniversalAIResponse(input) {
+            const lower = input.toLowerCase();
+            
+            if (lower.match(/\b(oi|olá|ola|hey|hello|bom dia|boa tarde|boa noite)\b/)) {
+                return "Olá! Sou a **IA Universal da Nexus**. Posso ajudar com análises esportivas, programação, matemática, conselhos ou qualquer outro tema. O que deseja explorar?";
+            }
+            if (lower.match(/\b(javascript|python|código|função|array|loop|html|css|react|node)\b/)) {
+                if (lower.includes("array") || lower.includes("ordenar")) {
+                    return "Exemplo em JavaScript para ordenar array:\n\n`const ordenar = (arr, prop) => [...arr].sort((a, b) => a[prop] > b[prop] ? 1 : -1);`\n\nPosso adaptar para sua necessidade específica.";
+                }
+                return "Como especialista em código, posso ajudar em **Python**, **JavaScript**, **C++**, **SQL** e outras linguagens. Qual é sua dúvida específica?";
+            }
+            if (lower.match(/\b(raiz|quadrada|soma|multiplicação|cálculo|equação|porcentagem|bhaskara)\b/)) {
+                if (lower.includes("raiz quadrada de 144")) return "A raiz quadrada de 144 é **12**.";
+                if (lower.includes("bhaskara")) return "Fórmula de Bhaskara:\n\n`x = (-b ± √(b² - 4ac)) / 2a`\n\nUsada para equações do 2º grau.";
+                return "Posso resolver expressões matemáticas, cálculo, estatística ou finanças. Qual o problema?";
+            }
+            if (lower.match(/\b(futebol|flamengo|palmeiras|jogo|partida|aposta|odd)\b/)) {
+                return "Analisando cenário esportivo: estamos em fase decisiva de campeonatos. A IA detecta valor em mercados de **escanteios** e **cartões** pela alta intensidade tática.\n\n💡 Use o *Gerador de Bilhetes* para análises personalizadas.";
+            }
+            if (lower.match(/\b(conselho|vida|trabalho|estudo|motivação)\b/)) {
+                return "**Foque no processo, não no resultado**. Seja nos estudos, trabalho ou apostas, a gestão de risco e consistência vencem a sorte no longo prazo.";
+            }
+            
+            const fallbacks = [
+                "Questão interessante. Com base no meu processamento, há múltiplas perspectivas. Poderia detalhar mais o contexto?",
+                "Entendido. Como IA avançada, processei sua solicitação. Posso estruturar a resposta em tópicos ou fornecer exemplos práticos.",
+                "Fascinante. Estou equipado para consultas complexas de diversas áreas. Vamos aprofundar nesse tópico?"
+            ];
+            return fallbacks[Math.floor(Math.random() * fallbacks.length)];
+        }
+
+        function escapeHtml(text) {
+            const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
+            return text.replace(/[&<>"']/g, m => map[m]);
+        }
+
+        // ==========================================
+        // 🛠️ UTILITÁRIOS
+        // ==========================================
+        function formatCurrency(value) {
+            return 'R$ ' + (value || 0).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const colors = {
+                success: 'bg-success',
+                error: 'bg-danger',
+                warning: 'bg-warning',
+                info: 'bg-primary'
+            };
+            const icons = {
+                success: 'fa-check-circle',
+                error: 'fa-times-circle',
+                warning: 'fa-exclamation-triangle',
+                info: 'fa-info-circle'
+            };
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${colors[type]} text-white px-5 py-3 rounded-xl shadow-2xl flex items-center gap-3 min-w-[280px]`;
+            toast.innerHTML = `<i class="fas ${icons[type]}"></i><span class="text-sm font-medium">${message}</span>`;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateX(100%)';
+                toast.style.transition = 'all 0.3s';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function showLoading(text = 'Carregando...') {
+            document.getElementById('loadingText').textContent = text;
+            document.getElementById('loadingOverlay').classList.remove('hidden');
+        }
+        function hideLoading() {
+            document.getElementById('loadingOverlay').classList.add('hidden');
+        }
+
+        // Fecha menu ao clicar fora
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('userMenu');
+            if (!e.target.closest('#userMenu') && !e.target.closest('[onclick*="toggleUserMenu"]')) {
+                menu.classList.add('hidden');
+            }
+        });
+
+        // ==========================================
+        // 🚀 INICIALIZAÇÃO
+        // ==========================================
+        console.log('🚀 NEXUS BET AI PRO inicializado com sucesso no projeto: nexus-bet-ia');
+    </script>
+</body>
+</html>
